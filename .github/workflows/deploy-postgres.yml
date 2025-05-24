@@ -6,25 +6,22 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      # Paso 1: Configurar la clave SSH para conectarse a la instancia EC2
-      - name: Configure SSH
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+      - name: Checkout code
+        uses: actions/checkout@v2
 
-      # Paso 2: Desplegar el contenedor PostgreSQL en la instancia EC2
-      - name: Deploy PostgreSQL container
+      - name: Deploy PostgreSQL to EC2
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
         run: |
-          ssh -o StrictHostKeyChecking=no ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-            # Detener y eliminar cualquier contenedor existente con el mismo nombre
-            docker stop postgresql-dev || true
-            docker rm postgresql-dev || true
-
-            # Ejecutar el contenedor PostgreSQL
+          echo "$EC2_SSH_KEY" > devops-keys.pem
+          chmod 600 devops-keys.pem
+          ssh -o StrictHostKeyChecking=no -i devops-keys.pem $EC2_USER@$EC2_HOST '
             docker run -d \
               --name postgresql-dev \
               -e POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
@@ -32,4 +29,5 @@ jobs:
               -e POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
               -p 5432:5432 \
               postgres:15
-          EOF
+          '
+          rm -f devops-keys.pem
