@@ -31,18 +31,20 @@ jobs:
           ssh -i ~/.ssh/ec2_key.pem \
               -o StrictHostKeyChecking=no \
               ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
-          # Copiar archivos SQL al contenedor
-          docker cp /tmp/*.sql postgresql-dev:/tmp/
+          # Copiar CADA archivo SQL al contenedor (uno por uno)
+          for sql_file in /tmp/*.sql; do
+            docker cp "$sql_file" postgresql-dev:/tmp/
+          done
 
-          # Ejecutar cada archivo SQL en la base de datos
+          # Ejecutar CADA archivo SQL en PostgreSQL
           for sql_file in /tmp/*.sql; do
             docker exec postgresql-dev \
               psql -U ${{ secrets.POSTGRES_USER }} \
-                   -d ${{ secrets.POSTGRES_DB }} \
-                   -f "$sql_file"
+                  -d ${{ secrets.POSTGRES_DB }} \
+                  -f "/tmp/$(basename "$sql_file")"
           done
 
-          # Limpiar archivos temporales
+          # Limpieza
           rm -f /tmp/*.sql
           docker exec postgresql-dev sh -c "rm -f /tmp/*.sql"
           EOF
