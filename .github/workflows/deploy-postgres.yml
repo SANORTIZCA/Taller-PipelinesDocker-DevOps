@@ -1,27 +1,28 @@
 name: Deploy PostgreSQL to EC2
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:  # Permite ejecutar manualmente el pipeline desde GitHub
 
 jobs:
   deploy:
+    name: Deploy PostgreSQL Container
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
 
-      - name: Deploy PostgreSQL to EC2
-        env:
-          EC2_HOST: ${{ secrets.EC2_HOST }}
-          EC2_USER: ${{ secrets.EC2_USER }}
-          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
-          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
-          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key
         run: |
-          echo "$EC2_SSH_KEY" > devops-keys.pem
-          chmod 600 devops-keys.pem
-          ssh -o StrictHostKeyChecking=no -i devops-keys.pem $EC2_USER@$EC2_HOST '
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.EC2_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Run Docker container on EC2
+        run: |
+          ssh ${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }} << 'EOF'
+            docker rm -f postgresql-dev || true
             docker run -d \
               --name postgresql-dev \
               -e POSTGRES_USER=${{ secrets.POSTGRES_USER }} \
@@ -29,5 +30,4 @@ jobs:
               -e POSTGRES_DB=${{ secrets.POSTGRES_DB }} \
               -p 5432:5432 \
               postgres:15
-          '
-          rm -f devops-keys.pem
+          EOF
