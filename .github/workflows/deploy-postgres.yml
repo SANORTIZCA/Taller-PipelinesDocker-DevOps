@@ -1,0 +1,43 @@
+name: Deploy PostgreSQL on EC2
+
+on:
+  workflow_dispatch:  # Permite ejecución manual desde GitHub Actions UI
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Configure SSH and deploy PostgreSQL
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+          POSTGRES_USER: ${{ secrets.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          POSTGRES_DB: ${{ secrets.POSTGRES_DB }}
+        run: |
+          # Guardar la clave SSH en un archivo temporal
+          echo "$EC2_SSH_KEY" > key.pem
+          chmod 400 key.pem
+
+          # Comando SSH para desplegar PostgreSQL en la EC2
+          ssh -i key.pem -o StrictHostKeyChecking=no $EC2_USER@$EC2_HOST << 'EOF'
+          # Detener y eliminar contenedor previo (si existe)
+          docker stop postgresql-dev || true
+          docker rm postgresql-dev || true
+
+          # Ejecutar nuevo contenedor PostgreSQL
+          docker run -d \
+            --name postgresql-dev \
+            -e POSTGRES_USER=$POSTGRES_USER \
+            -e POSTGRES_PASSWORD=$POSTGRES_PASSWORD \
+            -e POSTGRES_DB=$POSTGRES_DB \
+            -p 5432:5432 \
+            postgres:15
+          EOF
+
+          # Limpiar clave SSH (opcional por seguridad)
+          rm -f key.pem
